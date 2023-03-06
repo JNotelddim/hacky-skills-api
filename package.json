@@ -1,0 +1,8 @@
+{
+  "name": "hacky-skills-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:JNotelddim/hacky-skills-api.git",
+  "author": "JNotelddim <JNotelddim@users.noreply.github.com>",
+  "license": "MIT"
+}
