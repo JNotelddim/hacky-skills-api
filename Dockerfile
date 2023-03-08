@@ -14,6 +14,6 @@ RUN yarn install
 COPY . .
 RUN yarn build
 
-# App is configured to run on port 3000
-EXPOSE 3000
+# App is configured to run on port 8081
+EXPOSE 8081
 CMD ["node", "dist/index.js"]
