@@ -13,7 +13,7 @@ config();
 
 // Init app instance
 const app: Express = express();
-const port = 3000;
+const port = process.env.PORT;
 app.use(express.json());
 
 /** DynamoInit */
@@ -67,5 +67,5 @@ app.post("/createEntry", async (req: Request, res: Response) => {
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Hacky Skills Tracker API, listening on port ${port}`);
 });
