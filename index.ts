@@ -4,9 +4,10 @@ import {
   PutItemCommand,
   AttributeValue,
 } from "@aws-sdk/client-dynamodb";
-import express, { Express, Request, Response } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import { nanoid } from "nanoid";
 import { config } from "dotenv";
+import helmet from "helmet";
 
 // Load in Env Vars
 config();
@@ -15,11 +16,27 @@ config();
 const app: Express = express();
 const port = process.env.PORT;
 app.use(express.json());
+// Some basic security measures - see docs for more info http://expressjs.com/en/advanced/best-practice-security.html
+app.use(helmet());
+app.disable("x-powered-by");
 
 /** DynamoInit */
 const client = new DynamoDBClient({ region: "us-east-2" });
 
 /** Express endpoints **/
+
+// 404
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.status(404).send("Sorry can't find that!");
+});
+
+// 500
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error(err.stack);
+  res.status(500).send("Something broke!");
+});
+
+// 2xx
 app.get("/", async (req: Request, res: Response) => {
   res.send("Hello World!");
 });
