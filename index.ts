@@ -26,35 +26,56 @@ const client = new DynamoDBClient({ region: "us-east-2" });
 /** Express endpoints **/
 
 // 404
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.status(404).send("Sorry can't find that!");
-});
+// app.use((req: Request, res: Response, next: NextFunction) => {
+//   res.status(404).send("Sorry can't find that!");
+// });
 
-// 500
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
-});
+// // 500
+// app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+//   console.error(err.stack);
+//   res.status(500).send("Something broke!");
+// });
 
 // 2xx
 app.get("/", async (req: Request, res: Response) => {
   res.send("Hello World!");
 });
 
+// Helpers, TODO move to util folder
+export type AttributeValueValue = string | boolean | number | string[];
+export const convertAttributeValueToPlainObject = (
+  item: Record<string, AttributeValue>
+) => {
+  let result: Record<string, AttributeValueValue> = {};
+  Object.keys(item).map((key) => {
+    result[key] = Object.values(item[key])[0];
+  });
+
+  return result;
+};
+
 app.get("/items", async (req: Request, res: Response) => {
   const listItemsCommand = new ScanCommand({
     TableName: "hacky-skills-data",
   });
+  let results: Array<Record<string, AttributeValueValue>> = [];
+
   try {
-    const results = await client.send(listItemsCommand);
-    results.Items?.forEach((item) => {
-      console.log({ item, keys: Object.keys(item) });
-    });
+    const queryResult = await client.send(listItemsCommand);
+
+    if (!queryResult.Items) {
+      return [];
+    }
+
+    results = queryResult.Items.map(convertAttributeValueToPlainObject);
   } catch (err) {
     console.error(err);
   }
 
-  res.send("Items!");
+  res.send({
+    message: `${results.length} items.`,
+    data: results,
+  });
 });
 
 app.post("/createEntry", async (req: Request, res: Response) => {
@@ -75,12 +96,12 @@ app.post("/createEntry", async (req: Request, res: Response) => {
 
   try {
     const response = await client.send(putItemCommand);
-    console.log({ response });
+    console.log({ response: response });
   } catch (err) {
     console.error(err);
   }
 
-  res.send("new Entry , ...");
+  res.send(convertAttributeValueToPlainObject(newItem));
 });
 
 app.listen(port, () => {
