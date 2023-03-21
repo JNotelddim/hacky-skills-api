@@ -43,25 +43,34 @@ export const authenticateJWT = (
   const authHeader = req.headers.authorization;
   console.log("authenticating jwt", { authHeader });
 
-  if (!authHeader || !process.env.BOLT_KEY) {
-    res.sendStatus(401);
-    console.log("missing authheader or key");
-    next();
-    return;
-  }
-
-  const token = authHeader.split(" ")[1];
-  jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
-    if (err) {
-      console.log({ err });
-      return res.sendStatus(403);
+  try {
+    if (!authHeader || !process.env.BOLT_KEY) {
+      console.log("missing authheader");
+      res.sendStatus(400);
+      return;
     }
 
-    (req as any).authPayload = payload;
-    // console.log({ payload });
+    if (!process.env.BOLT_KEY) {
+      console.log("missing key");
+      res.sendStatus(500);
+      return;
+    }
 
-    next();
-  });
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
+      if (err) {
+        console.log({ err });
+        return res.sendStatus(403);
+      }
+
+      (req as any).authPayload = payload;
+      // console.log({ payload });
+
+      next();
+    });
+  } catch (e) {
+    console.log(e);
+  }
 };
 
 /** Express endpoints **/
