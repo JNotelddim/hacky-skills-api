@@ -26,7 +26,13 @@ app.use(helmet());
 app.disable("x-powered-by");
 
 /** DynamoInit */
-const client = new DynamoDBClient({ region: "us-east-2" });
+const client = new DynamoDBClient({
+  region: "us-east-2",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+  },
+});
 
 /**
  * `authenticateJWT` is needed for ensuring that the client making the
@@ -41,7 +47,6 @@ export const authenticateJWT = (
   next: NextFunction
 ) => {
   const authHeader = req.headers.authorization;
-  console.log("authenticating jwt", { authHeader });
 
   try {
     if (!authHeader) {
@@ -110,16 +115,15 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   });
   let results: Array<Record<string, AttributeValueValue>> = [];
 
+  console.log("attempting to fetch items");
   try {
     const queryResult = await client.send(listItemsCommand);
 
-    console.log({ metadata: queryResult.$metadata });
+    console.log({ queryResult, metadata: queryResult.$metadata });
 
-    if (!queryResult.Items) {
-      return [];
+    if (queryResult.Items) {
+      results = queryResult.Items.map(convertAttributeValueToPlainObject);
     }
-
-    results = queryResult.Items.map(convertAttributeValueToPlainObject);
   } catch (err) {
     console.error(err);
   }
@@ -148,6 +152,8 @@ app.post(
       type: { S: "log_entry" },
       userId: { S: userId },
     };
+
+    console.log("creating item with values", { newItem });
 
     const putItemCommand = new PutItemCommand({
       TableName: "hacky-skills-data",
