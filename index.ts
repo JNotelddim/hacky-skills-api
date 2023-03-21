@@ -41,11 +41,11 @@ export const authenticateJWT = (
   next: NextFunction
 ) => {
   const authHeader = req.headers.authorization;
-  // console.log("authenticating jwt", { authHeader });
+  console.log("authenticating jwt", { authHeader });
 
   if (!authHeader || !process.env.BOLT_KEY) {
     res.sendStatus(401);
-    // console.log("missing authheader or key");
+    console.log("missing authheader or key");
     next();
     return;
   }
@@ -53,6 +53,7 @@ export const authenticateJWT = (
   const token = authHeader.split(" ")[1];
   jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
     if (err) {
+      console.log({ err });
       return res.sendStatus(403);
     }
 
