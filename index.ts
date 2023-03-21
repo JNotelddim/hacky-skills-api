@@ -44,14 +44,14 @@ export const authenticateJWT = (
   console.log("authenticating jwt", { authHeader });
 
   try {
-    if (!authHeader || !process.env.BOLT_KEY) {
+    if (!authHeader) {
       console.log("missing authheader");
       res.sendStatus(400);
       return;
     }
 
     if (!process.env.BOLT_KEY) {
-      console.log("missing key");
+      console.log("missing key,", { bolt_key: process.env.BOLT_KEY });
       res.sendStatus(500);
       return;
     }

@@ -3,6 +3,9 @@ FROM node:16
 # Create app directory
 WORKDIR /usr/src/app
 
+ARG BOLT_KEY_ARG
+ENV BOLT_KEY=$BOLT_KEY_ARG
+
 # Install app dependencies
 COPY package*.json ./
 COPY yarn.lock ./
