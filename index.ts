@@ -113,6 +113,8 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   try {
     const queryResult = await client.send(listItemsCommand);
 
+    console.log({ metadata: queryResult.$metadata });
+
     if (!queryResult.Items) {
       return [];
     }

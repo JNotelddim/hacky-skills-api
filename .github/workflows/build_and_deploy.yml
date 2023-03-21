@@ -26,5 +26,9 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
           IMAGE_TAG: latest
         run: |
-          docker build --build-arg BOLT_KEY_ARG=${{ secrets.BOLT_KEY }} -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build \
+           --build-arg BOLT_KEY_ARG=${{ secrets.BOLT_KEY }} \
+           --build-arg AWS_ACCESS_KEY_ARG=${{ secrets.AWS_ACCESS_KEY }} \
+           --build-arg AWS_SECRET_KEY_ARG=${{ secrets.AWS_SECRET_KEY }} \
+           -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
