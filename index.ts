@@ -51,7 +51,7 @@ export const authenticateJWT = (
     }
 
     if (!process.env.BOLT_KEY) {
-      console.log("missing key,", { bolt_key: process.env.BOLT_KEY });
+      console.log("missing bolt key");
       res.sendStatus(500);
       return;
     }
@@ -132,14 +132,19 @@ app.post(
   "/createEntry",
   authenticateJWT,
   async (req: Request, res: Response) => {
-    const { title, description, tags, date } = req.body;
+    const { title, description, tags, createdAt, startDate, endDate, userId } =
+      req.body;
 
     const newItem: Record<string, AttributeValue> = {
       "skill-entry-key": { S: nanoid() },
       title: { S: title },
       description: { S: description },
       tags: { SS: tags },
-      date: { S: date },
+      startDate: { S: startDate },
+      endDate: { S: endDate },
+      createdAt: { S: createdAt },
+      type: { S: "log_entry" },
+      userId: { S: userId },
     };
 
     const putItemCommand = new PutItemCommand({
