@@ -5,8 +5,11 @@ import {
   AttributeValue,
 } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response, NextFunction } from "express";
+import cors from "cors";
+import jwt from "jsonwebtoken";
 import { nanoid } from "nanoid";
 import { config } from "dotenv";
+import bodyParser from "body-parser";
 import helmet from "helmet";
 
 // Load in Env Vars
@@ -16,12 +19,49 @@ config();
 const app: Express = express();
 const port = process.env.PORT;
 app.use(express.json());
+app.use(cors());
+app.use(bodyParser.json());
 // Some basic security measures - see docs for more info http://expressjs.com/en/advanced/best-practice-security.html
 app.use(helmet());
 app.disable("x-powered-by");
 
 /** DynamoInit */
 const client = new DynamoDBClient({ region: "us-east-2" });
+
+/**
+ * `authenticateJWT` is needed for ensuring that the client making the
+ * requests is the BoltJS app.
+ * We're using time-limited HMAC SHA256 signing with JWT tokens on all requests
+ * from the BoltJS app, and then this API validates the tokens.
+ * This way we know fairly confidently that it's the bolt app making the requests.
+ */
+export const authenticateJWT = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+  // console.log("authenticating jwt", { authHeader });
+
+  if (!authHeader || !process.env.BOLT_KEY) {
+    res.sendStatus(401);
+    // console.log("missing authheader or key");
+    next();
+    return;
+  }
+
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+
+    (req as any).authPayload = payload;
+    // console.log({ payload });
+
+    next();
+  });
+};
 
 /** Express endpoints **/
 
@@ -54,7 +94,7 @@ export const convertAttributeValueToPlainObject = (
   return result;
 };
 
-app.get("/items", async (req: Request, res: Response) => {
+app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   const listItemsCommand = new ScanCommand({
     TableName: "hacky-skills-data",
   });
@@ -78,31 +118,34 @@ app.get("/items", async (req: Request, res: Response) => {
   });
 });
 
-app.post("/createEntry", async (req: Request, res: Response) => {
-  const { title, description, tags, date } = req.body;
+app.post(
+  "/createEntry",
+  authenticateJWT,
+  async (req: Request, res: Response) => {
+    const { title, description, tags, date } = req.body;
 
-  const newItem: Record<string, AttributeValue> = {
-    "skill-entry-key": { S: nanoid() },
-    title: { S: title },
-    description: { S: description },
-    tags: { SS: tags },
-    date: { S: date },
-  };
+    const newItem: Record<string, AttributeValue> = {
+      "skill-entry-key": { S: nanoid() },
+      title: { S: title },
+      description: { S: description },
+      tags: { SS: tags },
+      date: { S: date },
+    };
 
-  const putItemCommand = new PutItemCommand({
-    TableName: "hacky-skills-data",
-    Item: newItem,
-  });
+    const putItemCommand = new PutItemCommand({
+      TableName: "hacky-skills-data",
+      Item: newItem,
+    });
 
-  try {
-    const response = await client.send(putItemCommand);
-    console.log({ response: response });
-  } catch (err) {
-    console.error(err);
+    try {
+      const response = await client.send(putItemCommand);
+    } catch (err) {
+      console.error(err);
+    }
+
+    res.send(convertAttributeValueToPlainObject(newItem));
   }
-
-  res.send(convertAttributeValueToPlainObject(newItem));
-});
+);
 
 app.listen(port, () => {
   console.log(`Hacky Skills Tracker API, listening on port ${port}`);
