@@ -138,8 +138,7 @@ app.post(
   "/createEntry",
   authenticateJWT,
   async (req: Request, res: Response) => {
-    const { title, description, tags, createdAt, startDate, endDate, userId } =
-      req.body;
+    const { title, description, tags, startDate, endDate, userId } = req.body;
 
     const newItem: Record<string, AttributeValue> = {
       "skill-entry-key": { S: nanoid() },
@@ -148,7 +147,7 @@ app.post(
       tags: { SS: tags },
       startDate: { S: startDate },
       endDate: { S: endDate },
-      createdAt: { S: createdAt },
+      createdAt: { S: new Date().toISOString() },
       type: { S: "log_entry" },
       userId: { S: userId },
     };
@@ -166,7 +165,10 @@ app.post(
       console.error(err);
     }
 
-    res.send(convertAttributeValueToPlainObject(newItem));
+    res.send({
+      message: "One item successfully created.",
+      data: convertAttributeValueToPlainObject(newItem),
+    });
   }
 );
 
