@@ -69,7 +69,6 @@ export const authenticateJWT = (
       }
 
       (req as any).authPayload = payload;
-      // console.log({ payload });
 
       next();
     });
@@ -110,6 +109,7 @@ export const convertAttributeValueToPlainObject = (
 };
 
 app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
+  console.log("handling /items get request");
   const listItemsCommand = new ScanCommand({
     TableName: "hacky-skills-data",
   });
@@ -138,9 +138,11 @@ app.post(
   "/createEntry",
   authenticateJWT,
   async (req: Request, res: Response) => {
+    console.log("handling /createEntry post request");
     const { title, description, tags, startDate, endDate, userId } = req.body;
 
     if (!title || !description || !tags || !userId) {
+      console.log("req body missing crucial key", { body: req.body });
       res.status(400).send({
         message: "Failed to create new entry.",
       });
@@ -171,7 +173,7 @@ app.post(
       if (response.$metadata.httpStatusCode === 200) {
         res.send({
           message: "One item successfully created.",
-          data: convertAttributeValueToPlainObject(newItem),
+          // data: convertAttributeValueToPlainObject(newItem),
         });
       }
     } catch (err) {
