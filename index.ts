@@ -138,7 +138,7 @@ app.post(
   "/createEntry",
   authenticateJWT,
   async (req: Request, res: Response) => {
-    console.log("handling /createEntry post request");
+    console.log("handling /createEntry post request", { body: req.body });
     const { title, description, tags, startDate, endDate, userId } = req.body;
 
     if (!title || !description || !tags || !userId) {
@@ -152,7 +152,7 @@ app.post(
       "skill-entry-key": { S: nanoid() },
       title: { S: title },
       description: { S: description },
-      tags: { SS: tags },
+      tags: { SS: typeof tags === "string" ? [tags] : tags },
       startDate: { S: startDate },
       endDate: { S: endDate },
       createdAt: { S: new Date().toISOString() },
@@ -166,6 +166,8 @@ app.post(
     });
 
     try {
+      console.log("trying putCommand", putItemCommand);
+
       const response = await client.send(putItemCommand);
 
       console.log({ response });
