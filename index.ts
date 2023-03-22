@@ -140,6 +140,12 @@ app.post(
   async (req: Request, res: Response) => {
     const { title, description, tags, startDate, endDate, userId } = req.body;
 
+    if (!title || !description || !tags || !userId) {
+      res.status(400).send({
+        message: "Failed to create new entry.",
+      });
+    }
+
     const newItem: Record<string, AttributeValue> = {
       "skill-entry-key": { S: nanoid() },
       title: { S: title },
@@ -152,8 +158,6 @@ app.post(
       userId: { S: userId },
     };
 
-    console.log("creating item with values", { newItem });
-
     const putItemCommand = new PutItemCommand({
       TableName: "hacky-skills-data",
       Item: newItem,
@@ -161,14 +165,21 @@ app.post(
 
     try {
       const response = await client.send(putItemCommand);
+
+      console.log({ response });
+
+      if (response.$metadata.httpStatusCode === 200) {
+        res.send({
+          message: "One item successfully created.",
+          data: convertAttributeValueToPlainObject(newItem),
+        });
+      }
     } catch (err) {
       console.error(err);
+      res.status(500).send({
+        message: "Failed to create new entry.",
+      });
     }
-
-    res.send({
-      message: "One item successfully created.",
-      data: convertAttributeValueToPlainObject(newItem),
-    });
   }
 );
 
