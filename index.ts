@@ -109,17 +109,23 @@ export const convertAttributeValueToPlainObject = (
 };
 
 app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
-  console.log("handling /items get request");
+  console.log("handling /items get request", req.query);
+  const { userId } = req.query;
   const listItemsCommand = new ScanCommand({
     TableName: "hacky-skills-data",
   });
+  if (userId) {
+    // vulnerable to injection attacks?
+    listItemsCommand.input.FilterExpression = `userId = :userId`;
+    listItemsCommand.input.ExpressionAttributeValues = {
+      ":userId": { S: userId.toString() },
+    };
+  }
+
   let results: Array<Record<string, AttributeValueValue>> = [];
 
-  console.log("attempting to fetch items");
   try {
     const queryResult = await client.send(listItemsCommand);
-
-    console.log({ queryResult, metadata: queryResult.$metadata });
 
     if (queryResult.Items) {
       results = queryResult.Items.map(convertAttributeValueToPlainObject);
