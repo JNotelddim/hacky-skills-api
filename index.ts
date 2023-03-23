@@ -146,6 +146,7 @@ app.post(
       res.status(400).send({
         message: "Failed to create new entry.",
       });
+      return;
     }
 
     const newItem: Record<string, AttributeValue> = {
