@@ -3,6 +3,7 @@ import {
   ScanCommand,
   PutItemCommand,
   AttributeValue,
+  PutItemCommandOutput,
 } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
@@ -127,6 +128,8 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   try {
     const queryResult = await client.send(listItemsCommand);
 
+    // TODO: swap in read-friendly tag versions.
+
     if (queryResult.Items) {
       results = queryResult.Items.map(convertAttributeValueToPlainObject);
     }
@@ -140,12 +143,83 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   });
 });
 
+const splitTags = (input: string) => {
+  if (!input || !input.length) {
+    return [];
+  }
+
+  const splitItems = input.split(",");
+  const escapeCharsRegex = /\W/;
+  const trimmedItems = splitItems.map((item) =>
+    item.replace(escapeCharsRegex, "")
+  );
+  console.log({ input, trimmedItems });
+
+  return trimmedItems;
+};
+
+/**
+ * When creating tags in the db, we want to let existing tags
+ * take precendence over new ones.
+ */
+const createTag = async (tag: string) => {
+  const newTag: Record<string, AttributeValue> = {
+    "skill-tag-key": { S: tag.toLocaleLowerCase() },
+    originalTag: { S: tag },
+    createdAt: { S: new Date().toISOString() },
+    // TODO: link to entries?
+    // entries: []
+  };
+  console.log("creating tag with values", { newTag });
+  const createTagCommand = new PutItemCommand({
+    TableName: "hacky-skills-tags",
+    Item: newTag,
+  });
+  const result = await client.send(createTagCommand);
+  return result;
+};
+
+/**
+ * Creatinng entry items in the db.
+ */
+const createEntry = async (body: Record<string, any>) => {
+  const { title, description, tags, startDate, endDate, userId } = body;
+
+  const newItem: Record<string, AttributeValue> = {
+    "skill-entry-key": { S: nanoid() },
+    title: { S: title },
+    description: { S: description },
+    tags: { SS: tags },
+    startDate: { S: startDate },
+    endDate: { S: endDate },
+    createdAt: { S: new Date().toISOString() },
+    type: { S: "log_entry" },
+    userId: { S: userId },
+  };
+
+  console.log("inserting entry with values:", newItem);
+
+  const putItemCommand = new PutItemCommand({
+    TableName: "hacky-skills-data",
+    Item: newItem,
+  });
+
+  const response = await client.send(putItemCommand);
+  return response;
+};
+
+/**
+ * Endpoint allowing for the creation of entries.
+ * Importantly, the tags submitted with the entries are separated
+ * and inserted into their own table, and then the entries here are
+ * inserted with just
+ */
 app.post(
   "/createEntry",
   authenticateJWT,
   async (req: Request, res: Response) => {
     console.log("handling /createEntry post request", { body: req.body });
-    const { title, description, tags, startDate, endDate, userId } = req.body;
+    const { title, description, tags, userId } = req.body;
 
     if (!title || !description || !tags || !userId) {
       console.log("req body missing crucial key", { body: req.body });
@@ -155,34 +229,38 @@ app.post(
       return;
     }
 
-    const newItem: Record<string, AttributeValue> = {
-      "skill-entry-key": { S: nanoid() },
-      title: { S: title },
-      description: { S: description },
-      tags: { SS: typeof tags === "string" ? [tags] : tags },
-      startDate: { S: startDate },
-      endDate: { S: endDate },
-      createdAt: { S: new Date().toISOString() },
-      type: { S: "log_entry" },
-      userId: { S: userId },
-    };
-
-    const putItemCommand = new PutItemCommand({
-      TableName: "hacky-skills-data",
-      Item: newItem,
-    });
+    const individualTags = splitTags(tags);
+    let dbTags: string[] = [];
 
     try {
-      console.log("trying putCommand", putItemCommand);
+      dbTags = await Promise.all(
+        individualTags.map(async (tag) => {
+          // TODO: insert tag into dynamo tags table, get key
+          // if it's a duplicate, just ignore and let the existing one be used.
+          const result = await createTag(tag);
+          console.log("tag creation response", { tag }, { result });
+          // also
+          // TODO: if the new tag is similar to an existing one, but not a sufficient
+          // match to be confident (https://www.npmjs.com/package/string-similarity),
+          // Fire off some prompts to the user after the form submission and have them
+          // Decide whether or not to update to the existing tag.
+          // return result;
+          return tag.toLocaleLowerCase();
+        })
+      );
+      console.log("all tags created, ", { dbTags });
+      // });
+    } catch (err) {
+      console.log("something went wrong creating the tags", err);
+    }
 
-      const response = await client.send(putItemCommand);
-
-      console.log({ response });
+    try {
+      // TODO: update tags value being passed in.
+      const response = await createEntry({ ...req.body, tags: dbTags });
 
       if (response.$metadata.httpStatusCode === 200) {
         res.send({
           message: "One item successfully created.",
-          // data: convertAttributeValueToPlainObject(newItem),
         });
       }
     } catch (err) {
