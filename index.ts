@@ -153,7 +153,6 @@ const splitTags = (input: string) => {
   const trimmedItems = splitItems.map((item) =>
     item.replace(escapeCharsRegex, "")
   );
-  console.log({ input, trimmedItems });
 
   return trimmedItems;
 };
@@ -170,7 +169,6 @@ const createTag = async (tag: string) => {
     // TODO: link to entries?
     // entries: []
   };
-  console.log("creating tag with values", { newTag });
   const createTagCommand = new PutItemCommand({
     TableName: "hacky-skills-tags",
     Item: newTag,
@@ -196,8 +194,6 @@ const createEntry = async (body: Record<string, any>) => {
     type: { S: "log_entry" },
     userId: { S: userId },
   };
-
-  console.log("inserting entry with values:", newItem);
 
   const putItemCommand = new PutItemCommand({
     TableName: "hacky-skills-data",
@@ -235,27 +231,19 @@ app.post(
     try {
       dbTags = await Promise.all(
         individualTags.map(async (tag) => {
-          // TODO: insert tag into dynamo tags table, get key
           // if it's a duplicate, just ignore and let the existing one be used.
           const result = await createTag(tag);
-          console.log("tag creation response", { tag }, { result });
-          // also
-          // TODO: if the new tag is similar to an existing one, but not a sufficient
-          // match to be confident (https://www.npmjs.com/package/string-similarity),
-          // Fire off some prompts to the user after the form submission and have them
-          // Decide whether or not to update to the existing tag.
-          // return result;
+
+          // TODO: handle failures?
           return tag.toLocaleLowerCase();
         })
       );
-      console.log("all tags created, ", { dbTags });
       // });
     } catch (err) {
       console.log("something went wrong creating the tags", err);
     }
 
     try {
-      // TODO: update tags value being passed in.
       const response = await createEntry({ ...req.body, tags: dbTags });
 
       if (response.$metadata.httpStatusCode === 200) {
@@ -269,6 +257,13 @@ app.post(
         message: "Failed to create new entry.",
       });
     }
+
+    // TODO: final follow-up:
+    // - ensure entries are listed on tags
+    // - compare new tags to existing ones for similarity and
+    //    if there are matches, offer user to update their tags
+    //    to pre-existing similar ones.
+    //    (https://www.npmjs.com/package/string-similarity),
   }
 );
 
