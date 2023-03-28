@@ -164,11 +164,8 @@ app.get("/search", authenticateJWT, async (req: Request, res: Response) => {
     return;
   }
 
-  // res.send("This feature is a WIP, check back later.");
-
+  // TODO: fix individualTags going too hard with escaping characters (ie, 'new-tag' is becoming 'newtag')
   const individualTags = splitTags(tags.toString());
-
-  console.log({ individualTags });
 
   /* Gathering tags which match the queryString. */
   const tagsSearchCommand = new BatchGetItemCommand({
@@ -216,7 +213,9 @@ app.get("/search", authenticateJWT, async (req: Request, res: Response) => {
   const foundEntries = entriesResults.Responses?.[ENTRIES_TABLE];
 
   res.send({
-    message: `X results found matching at least one of the tags provided`,
+    message: `Found ${
+      foundEntries?.length || 0
+    } results matching at least one of the tags provided`,
     data: {
       tags: foundTags.map(convertAttributeValueToPlainObject),
       entries: foundEntries?.map(convertAttributeValueToPlainObject),
