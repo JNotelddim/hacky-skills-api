@@ -3,8 +3,8 @@ import {
   ScanCommand,
   PutItemCommand,
   AttributeValue,
-  PutItemCommandOutput,
   GetItemCommand,
+  UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
@@ -175,7 +175,7 @@ const splitTags = (input: string) => {
  * When creating tags in the db, we want to let existing tags
  * take precendence over new ones.
  */
-const createTag = async (tag: string, entryId?: string) => {
+const createOrUpdateTag = async (tag: string, entryId: string) => {
   // Tag key is the lower-case version of the tag string to keep it consistent across casings
   const tagKey = tag.toLocaleLowerCase();
 
@@ -184,50 +184,39 @@ const createTag = async (tag: string, entryId?: string) => {
     TableName: "hacky-skills-tags",
     Key: { "skill-tag-key": { S: tagKey } },
   });
-  const existanceResult = await client.send(tagCheckCommand);
-  console.log({ existanceResult });
-
-  let tagItem: Record<string, AttributeValue> = {
-    "skill-tag-key": { S: tagKey },
-  };
+  const existingItem = await client.send(tagCheckCommand);
 
   /* Updating the existing tag or create a new one, ensuring the entry is tracked on the tag's entries array */
-  if (existanceResult.Item) {
-    console.log("UPDATING EXISTING TAG");
-    if (existanceResult.Item["entries"] && entryId) {
-      console.log({ entries: existanceResult.Item["entries"].SS, entryId });
-      console.log("entry values", {
-        values: existanceResult.Item["entries"].SS,
-      });
-
-      tagItem.entries = {
-        SS: [...(existanceResult.Item["entries"].SS || []), entryId],
-      };
-    } else {
-      console.log("issue updating tag entries array", {
-        existanceResult,
-        entryId,
-      });
-    }
+  if (existingItem.Item) {
+    console.log("updating existing tag,", tagKey);
+    const updateTagCommand = new UpdateItemCommand({
+      TableName: "hacky-skills-tags",
+      Key: { "skill-tag-key": { S: tagKey } },
+      AttributeUpdates: {
+        entries: {
+          Value: {
+            SS: [...(existingItem.Item["entries"].SS || []), entryId],
+          },
+        },
+      },
+    });
+    await client.send(updateTagCommand);
+    // TODO: handle errors?
   } else {
-    console.log("CREATING NEW TAG");
-    tagItem = {
+    console.log("inserting new tag,", tagKey);
+    const newItem: Record<string, AttributeValue> = {
       "skill-tag-key": { S: tagKey },
       originalTag: { S: tag },
       createdAt: { S: new Date().toISOString() },
-      // TODO: link to entries?
       entries: entryId ? { SS: [entryId] } : { NULL: true },
     };
+    const putTagCommand = new PutItemCommand({
+      TableName: "hacky-skills-tags",
+      Item: newItem,
+    });
+    await client.send(putTagCommand);
+    // TODO: handle errors?
   }
-
-  /* Whether it's a create or an update, we use the Put command. */
-  const putTagCommand = new PutItemCommand({
-    TableName: "hacky-skills-tags",
-    Item: tagItem,
-  });
-  const result = await client.send(putTagCommand);
-
-  return result;
 };
 
 /**
@@ -281,19 +270,17 @@ app.post(
       return;
     }
 
+    /* Convert the comma-separated tags in one string, to individual strings in an array */
     const individualTags = splitTags(tags);
 
+    /* Once we have the individual tag values, we can create our new entry */
     let newEntryId: string | undefined;
-
-    console.log("creating new entry");
     try {
       const { id, response } = await createEntry({
         ...req.body,
         tags: individualTags.map((tag) => tag.toLocaleLowerCase()),
       });
       newEntryId = id;
-
-      console.log("resulting new item id", { newEntryId });
 
       if (response.$metadata.httpStatusCode === 200) {
         res.send({
@@ -307,22 +294,18 @@ app.post(
       });
     }
 
-    // TODO: final follow-up:
-    // - ensure entries are listed on tags
-    // - compare new tags to existing ones for similarity and
-    //    if there are matches, offer user to update their tags
-    //    to pre-existing similar ones.
-    //    (https://www.npmjs.com/package/string-similarity),
+    /* And once the entry is created, we can create/update the tag items with the new entry's key */
+
+    // If the entry id doesn't exist, then something went wrong and we shouldn't move forward
+    if (!newEntryId) {
+      return;
+    }
 
     try {
-      console.log("creating tags", individualTags);
+      console.log("creating/updating tags", individualTags);
       await Promise.all(
         individualTags.map(async (tag) => {
-          // if it's a duplicate, just ignore and let the existing one be used.
-          const result = await createTag(tag, newEntryId);
-
-          console.log("tag creation result", { result });
-
+          await createOrUpdateTag(tag, newEntryId as string);
           // TODO: handle failures?
           return tag.toLocaleLowerCase();
         })
@@ -330,6 +313,12 @@ app.post(
     } catch (err) {
       console.log("something went wrong creating the tags", err);
     }
+
+    // TODO: final follow-up:
+    // - compare new tags to existing ones for similarity and
+    //    if there are matches, offer user to update their tags
+    //    to pre-existing similar ones.
+    //    (https://www.npmjs.com/package/string-similarity),
   }
 );
 
