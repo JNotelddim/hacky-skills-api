@@ -5,6 +5,8 @@ import {
   AttributeValue,
   GetItemCommand,
   UpdateItemCommand,
+  QueryCommand,
+  BatchGetItemCommand,
 } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
@@ -13,6 +15,14 @@ import { nanoid } from "nanoid";
 import { config } from "dotenv";
 import bodyParser from "body-parser";
 import helmet from "helmet";
+
+const TAGS_TABLE = "hacky-skills-tags";
+const TAGS_KEY = "skill-tag-key";
+const ENTRIES_TABLE = "hacky-skills-data";
+const ENTRIES_KEY = "skill-entry-key";
+enum EntryType {
+  LogEntry = "log_entry",
+}
 
 // Load in Env Vars
 config();
@@ -114,7 +124,7 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   console.log("handling /items get request", req.query);
   const { userId } = req.query;
   const listItemsCommand = new ScanCommand({
-    TableName: "hacky-skills-data",
+    TableName: ENTRIES_TABLE,
   });
   if (userId) {
     // vulnerable to injection attacks?
@@ -147,10 +157,71 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
 app.get("/search", authenticateJWT, async (req: Request, res: Response) => {
   const { tags } = req.query;
 
-  // split tags
+  console.log({ tags });
 
-  // search "tags" table by ids
-  // => include (entries) field on any matching "tag" rows.
+  if (!tags) {
+    res.status(400).send("Bad Request");
+    return;
+  }
+
+  // res.send("This feature is a WIP, check back later.");
+
+  const individualTags = splitTags(tags.toString());
+
+  console.log({ individualTags });
+
+  /* Gathering tags which match the queryString. */
+  const tagsSearchCommand = new BatchGetItemCommand({
+    RequestItems: {
+      [TAGS_TABLE]: {
+        Keys: individualTags.map((tag) => ({ [TAGS_KEY]: { S: tag } })),
+      },
+    },
+  });
+  const results = await client.send(tagsSearchCommand);
+  if (!results.Responses) {
+    res.send({ message: "No matches found", data: [] });
+    return;
+  }
+  const foundTags = results.Responses[TAGS_TABLE];
+
+  /* For all entries on each tag, get the full entry item and create a list of unique entries. */
+  const allEntryIds = foundTags.flatMap((tag) => tag["entries"].SS);
+  if (!allEntryIds) {
+    res.status(404).send("No entries found");
+    return;
+  }
+
+  // Look up actual entries based on entry ids;
+  const uniqueEntryIds = allEntryIds.reduce((entryIds, next) => {
+    return !!next && !entryIds.includes(next) ? [...entryIds, next] : entryIds;
+  }, [] as string[]);
+
+  const entriesSearchCommand = new BatchGetItemCommand({
+    RequestItems: {
+      [ENTRIES_TABLE]: {
+        Keys: uniqueEntryIds.map((entryId) => ({
+          [ENTRIES_KEY]: { S: entryId },
+        })),
+        // Only get relevant attributes
+        ProjectionExpression: "title, createdAt, userId, #k",
+        ExpressionAttributeNames: {
+          "#k": ENTRIES_KEY,
+        },
+      },
+    },
+  });
+
+  const entriesResults = await client.send(entriesSearchCommand);
+  const foundEntries = entriesResults.Responses?.[ENTRIES_TABLE];
+
+  res.send({
+    message: `X results found matching at least one of the tags provided`,
+    data: {
+      tags: foundTags.map(convertAttributeValueToPlainObject),
+      entries: foundEntries?.map(convertAttributeValueToPlainObject),
+    },
+  });
 
   // for any matching entry ids, fetch the entry.
 
@@ -181,8 +252,8 @@ const createOrUpdateTag = async (tag: string, entryId: string) => {
 
   /* Check if it already exists */
   const tagCheckCommand = new GetItemCommand({
-    TableName: "hacky-skills-tags",
-    Key: { "skill-tag-key": { S: tagKey } },
+    TableName: TAGS_TABLE,
+    Key: { [TAGS_KEY]: { S: tagKey } },
   });
   const existingItem = await client.send(tagCheckCommand);
 
@@ -190,8 +261,8 @@ const createOrUpdateTag = async (tag: string, entryId: string) => {
   if (existingItem.Item) {
     console.log("updating existing tag,", tagKey);
     const updateTagCommand = new UpdateItemCommand({
-      TableName: "hacky-skills-tags",
-      Key: { "skill-tag-key": { S: tagKey } },
+      TableName: TAGS_TABLE,
+      Key: { [TAGS_KEY]: { S: tagKey } },
       AttributeUpdates: {
         entries: {
           Value: {
@@ -205,13 +276,13 @@ const createOrUpdateTag = async (tag: string, entryId: string) => {
   } else {
     console.log("inserting new tag,", tagKey);
     const newItem: Record<string, AttributeValue> = {
-      "skill-tag-key": { S: tagKey },
+      [TAGS_KEY]: { S: tagKey },
       originalTag: { S: tag },
       createdAt: { S: new Date().toISOString() },
       entries: entryId ? { SS: [entryId] } : { NULL: true },
     };
     const putTagCommand = new PutItemCommand({
-      TableName: "hacky-skills-tags",
+      TableName: TAGS_TABLE,
       Item: newItem,
     });
     await client.send(putTagCommand);
@@ -226,25 +297,25 @@ const createEntry = async (body: Record<string, any>) => {
   const { title, description, tags, startDate, endDate, userId } = body;
 
   const newItem: Record<string, AttributeValue> = {
-    "skill-entry-key": { S: nanoid() },
+    [ENTRIES_KEY]: { S: nanoid() },
     title: { S: title },
     description: { S: description },
     tags: { SS: tags },
     startDate: { S: startDate },
     endDate: { S: endDate },
     createdAt: { S: new Date().toISOString() },
-    type: { S: "log_entry" },
+    type: { S: EntryType.LogEntry },
     userId: { S: userId },
   };
 
   const putItemCommand = new PutItemCommand({
-    TableName: "hacky-skills-data",
+    TableName: ENTRIES_TABLE,
     Item: newItem,
   });
 
   const response = await client.send(putItemCommand);
   return {
-    id: newItem["skill-entry-key"].S,
+    id: newItem[ENTRIES_KEY].S,
     response,
   };
 };
