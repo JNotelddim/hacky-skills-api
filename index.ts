@@ -60,33 +60,36 @@ export const authenticateJWT = (
 ) => {
   const authHeader = req.headers.authorization;
 
-  try {
-    if (!authHeader) {
-      console.log("missing authheader");
-      res.sendStatus(400);
-      return;
-    }
+  console.log("skipping authentication for local development");
+  next();
 
-    if (!process.env.BOLT_KEY) {
-      console.log("missing bolt key");
-      res.sendStatus(500);
-      return;
-    }
+  // try {
+  //   if (!authHeader) {
+  //     console.log("missing authheader");
+  //     res.sendStatus(400);
+  //     return;
+  //   }
 
-    const token = authHeader.split(" ")[1];
-    jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
-      if (err) {
-        console.log({ err });
-        return res.sendStatus(403);
-      }
+  //   if (!process.env.BOLT_KEY) {
+  //     console.log("missing bolt key");
+  //     res.sendStatus(500);
+  //     return;
+  //   }
 
-      (req as any).authPayload = payload;
+  //   const token = authHeader.split(" ")[1];
+  //   jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
+  //     if (err) {
+  //       console.log({ err });
+  //       return res.sendStatus(403);
+  //     }
 
-      next();
-    });
-  } catch (e) {
-    console.log(e);
-  }
+  //     (req as any).authPayload = payload;
+
+  //     next();
+  //   });
+  // } catch (e) {
+  //   console.log(e);
+  // }
 };
 
 /** Express endpoints **/
@@ -119,6 +122,36 @@ export const convertAttributeValueToPlainObject = (
 
   return result;
 };
+
+app.get("/tags", authenticateJWT, async (req: Request, res: Response) => {
+  // Since I have the key name itself as the key,
+  // I can't actually sort by key name in dyanmodb query,
+  // nor can I functionally query for a chunk with a good key comparison...
+  // or at least I think. I can try anyways.
+
+  // TODO: paginate
+
+  // Scans are bad though right? :(
+  const listTagsCommand = new ScanCommand({
+    TableName: TAGS_TABLE,
+    ProjectionExpression: "#k, originalTag, createdAt",
+    ExpressionAttributeNames: { "#k": TAGS_KEY },
+  });
+  const tagsResults = await client.send(listTagsCommand);
+
+  if (!tagsResults.Count || tagsResults.Count <= 0) {
+    res.send({ message: "No tags found", data: [] });
+  }
+
+  const reformattedTags = tagsResults.Items?.map(
+    convertAttributeValueToPlainObject
+  );
+
+  res.send({
+    message: `Found ${tagsResults.Count} tags.`,
+    data: reformattedTags,
+  });
+});
 
 app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
   console.log("handling /items get request", req.query);
