@@ -5,16 +5,15 @@ import {
   AttributeValue,
   GetItemCommand,
   UpdateItemCommand,
-  QueryCommand,
   BatchGetItemCommand,
 } from "@aws-sdk/client-dynamodb";
-import express, { Express, Request, Response, NextFunction } from "express";
+import express, { Express, Request, Response } from "express";
 import cors from "cors";
-import jwt from "jsonwebtoken";
-import { nanoid } from "nanoid";
+import { uid } from "uid";
 import { config } from "dotenv";
 import bodyParser from "body-parser";
 import helmet from "helmet";
+import { authenticateJWT } from "./middlewares/authenticateJWT";
 
 const TAGS_TABLE = "hacky-skills-tags";
 const TAGS_KEY = "skill-tag-key";
@@ -45,49 +44,6 @@ const client = new DynamoDBClient({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   },
 });
-
-/**
- * `authenticateJWT` is needed for ensuring that the client making the
- * requests is the BoltJS app.
- * We're using time-limited HMAC SHA256 signing with JWT tokens on all requests
- * from the BoltJS app, and then this API validates the tokens.
- * This way we know fairly confidently that it's the bolt app making the requests.
- */
-export const authenticateJWT = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const authHeader = req.headers.authorization;
-
-  try {
-    if (!authHeader) {
-      console.log("missing authheader");
-      res.sendStatus(400);
-      return;
-    }
-
-    if (!process.env.BOLT_KEY) {
-      console.log("missing bolt key");
-      res.sendStatus(500);
-      return;
-    }
-
-    const token = authHeader.split(" ")[1];
-    jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
-      if (err) {
-        console.log({ err });
-        return res.sendStatus(403);
-      }
-
-      (req as any).authPayload = payload;
-
-      next();
-    });
-  } catch (e) {
-    console.log(e);
-  }
-};
 
 /** Express endpoints **/
 
@@ -336,7 +292,7 @@ const createEntry = async (body: Record<string, any>) => {
   const { title, description, tags, startDate, endDate, userId } = body;
 
   const newItem: Record<string, AttributeValue> = {
-    [ENTRIES_KEY]: { S: nanoid() },
+    [ENTRIES_KEY]: { S: uid() },
     title: { S: title },
     description: { S: description },
     tags: { SS: tags },

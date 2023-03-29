@@ -1,11 +1,10 @@
 {
   "name": "hacky-skills-api",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "repository": "git@github.com:JNotelddim/hacky-skills-api.git",
   "author": "JNotelddim <JNotelddim@users.noreply.github.com>",
   "license": "MIT",
-  "type": "module",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.284.0",
     "body-parser": "^1.20.2",
@@ -14,7 +13,7 @@
     "express": "^4.18.2",
     "helmet": "^6.0.1",
     "jsonwebtoken": "^9.0.0",
-    "nanoid": "^4.0.1"
+    "uid": "^2.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",
