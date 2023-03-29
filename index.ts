@@ -157,8 +157,6 @@ app.get("/items", authenticateJWT, async (req: Request, res: Response) => {
 app.get("/search", authenticateJWT, async (req: Request, res: Response) => {
   const { tags } = req.query;
 
-  console.log({ tags });
-
   if (!tags) {
     res.status(400).send("Bad Request");
     return;
@@ -184,7 +182,7 @@ app.get("/search", authenticateJWT, async (req: Request, res: Response) => {
 
   /* For all entries on each tag, get the full entry item and create a list of unique entries. */
   const allEntryIds = foundTags.flatMap((tag) => tag["entries"].SS);
-  if (!allEntryIds) {
+  if (!allEntryIds || !allEntryIds.length) {
     res.status(404).send("No entries found");
     return;
   }
