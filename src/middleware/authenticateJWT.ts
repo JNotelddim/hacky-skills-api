@@ -8,40 +8,47 @@ import jwt from "jsonwebtoken";
  * from the BoltJS app, and then this API validates the tokens.
  * This way we know fairly confidently that it's the bolt app making the requests.
  */
+
+// export const authenticateJWT = (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ) => {
+//   next();
+// };
+
 export const authenticateJWT = (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  // const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization;
 
-  next();
+  try {
+    if (!authHeader) {
+      console.log("missing authheader");
+      res.sendStatus(400);
+      return;
+    }
 
-  // try {
-  //   if (!authHeader) {
-  //     console.log("missing authheader");
-  //     res.sendStatus(400);
-  //     return;
-  //   }
+    if (!process.env.BOLT_KEY) {
+      console.log("missing bolt key");
+      res.sendStatus(500);
+      return;
+    }
 
-  //   if (!process.env.BOLT_KEY) {
-  //     console.log("missing bolt key");
-  //     res.sendStatus(500);
-  //     return;
-  //   }
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
+      if (err) {
+        console.log({ err });
+        return res.sendStatus(403);
+      }
 
-  //   const token = authHeader.split(" ")[1];
-  //   jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
-  //     if (err) {
-  //       console.log({ err });
-  //       return res.sendStatus(403);
-  //     }
+      (req as any).authPayload = payload;
 
-  //     (req as any).authPayload = payload;
-
-  //     next();
-  //   });
-  // } catch (e) {
-  //   console.log(e);
-  // }
+      next();
+    });
+  } catch (e) {
+    console.log(e);
+  }
 };
