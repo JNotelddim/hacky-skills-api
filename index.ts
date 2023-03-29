@@ -124,25 +124,14 @@ export const convertAttributeValueToPlainObject = (
 };
 
 app.get("/tags", authenticateJWT, async (req: Request, res: Response) => {
-  // Since I have the key name itself as the key,
-  // I can't actually sort by key name in dyanmodb query,
-  // nor can I functionally query for a chunk with a good key comparison...
-  // or at least I think. I can try anyways.
-
-  // TODO: paginate
-
   const { before, after, size } = req.query;
-
-  console.log("creating tag list command", before, after, size);
+  // TODO: How to handle "before" for getting previous page?
 
   let limit = parseInt(size?.toString() || "");
   if (isNaN(limit)) {
     limit = 5;
   }
 
-  console.log({ limit });
-
-  // Scans are bad though right? :(
   const listTagsCommand = new ScanCommand({
     TableName: TAGS_TABLE,
     Limit: limit,
@@ -152,18 +141,12 @@ app.get("/tags", authenticateJWT, async (req: Request, res: Response) => {
 
   // K but how would I support "before"?...
   if (after) {
-    console.log("applying 'after' value as key condition", after);
-
     listTagsCommand.input.ExclusiveStartKey = {
       [TAGS_KEY]: { S: after.toString() },
     };
   }
 
-  console.log({ listTagsCommand: JSON.stringify(listTagsCommand) });
-
   const tagsResults = await client.send(listTagsCommand);
-
-  console.log({ tagsResults });
 
   if (!tagsResults.Count || tagsResults.Count <= 0) {
     res.send({ message: "No tags found", data: [] });
@@ -175,7 +158,10 @@ app.get("/tags", authenticateJWT, async (req: Request, res: Response) => {
 
   res.send({
     message: `Found ${tagsResults.Count} tags.`,
-    data: reformattedTags,
+    data: {
+      items: reformattedTags,
+      hasMore: !!tagsResults.LastEvaluatedKey,
+    },
   });
 });
 
