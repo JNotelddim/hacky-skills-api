@@ -2,18 +2,19 @@ import { BatchGetItemCommand } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response } from "express";
 
 import { client } from "..";
-import {
-  ENTRIES_KEY,
-  ENTRIES_TABLE,
-  TAGS_KEY,
-  TAGS_TABLE,
-} from "../config/const";
-import { authenticateJWT } from "../middleware/authenticateJWT";
-import { convertAttributeValueToPlainObject } from "../util/convertAttributeValueToPlainObject";
-import { splitTags } from "../util/splitTags";
+import { ENTRIES_KEY, ENTRIES_TABLE, TAGS_KEY, TAGS_TABLE } from "../config";
+import { authenticateJWT } from "../middleware";
+import { convertAttributeValueToPlainObject, splitTags } from "../util";
 
 export const searchRoute: Express = express();
 
+/**
+ * This endpoint expects a `tags` queryString which can be either a single string, or a
+ * a list of comma-delimited tag strings, ex/ "rest,test,best",
+ *
+ * The tags and entries are stored separately, so first we need to get any matching tags,
+ * and given those matching tags (if any exist), we can then gather the associated entries.
+ */
 searchRoute.get(
   "/search",
   authenticateJWT,

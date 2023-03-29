@@ -11,6 +11,17 @@ import {
 
 export const getItemsRoute: Express = express();
 
+/**
+ * This endpoint is intended to generally be filtering by userId, though it also
+ * supports getting the items without the user filtering.
+ *
+ * Theoretically, it'd be a good ideal to paginate this endpoint, but for now it's
+ * alright as is.
+ *
+ * TODOs:
+ * - escape userId input to prevent injection attacks,
+ * - replace tag ids with friendly-string tag values.
+ */
 getItemsRoute.get(
   "/items",
   authenticateJWT,
@@ -21,7 +32,6 @@ getItemsRoute.get(
       TableName: ENTRIES_TABLE,
     });
     if (userId) {
-      // vulnerable to injection attacks?
       listItemsCommand.input.FilterExpression = `userId = :userId`;
       listItemsCommand.input.ExpressionAttributeValues = {
         ":userId": { S: userId.toString() },
@@ -32,8 +42,6 @@ getItemsRoute.get(
 
     try {
       const queryResult = await client.send(listItemsCommand);
-
-      // TODO: swap in read-friendly tag versions.
 
       if (queryResult.Items) {
         results = queryResult.Items.map(convertAttributeValueToPlainObject);

@@ -28,21 +28,8 @@ app.use(bodyParser.json());
 app.use(helmet());
 app.disable("x-powered-by");
 
-/** Express endpoints **/
-
-// 404
-// app.use((req: Request, res: Response, next: NextFunction) => {
-//   res.status(404).send("Sorry can't find that!");
-// });
-
-// // 500
-// app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-//   console.error(err.stack);
-//   res.status(500).send("Something broke!");
-// });
-
-// 2xx
-app.get("/", async (req: Request, res: Response) => {
+// TODO: implement custom 404 & 500 handlers
+app.get("/", async (_req: Request, res: Response) => {
   res.send("Hello World!");
 });
 

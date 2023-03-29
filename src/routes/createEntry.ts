@@ -8,9 +8,27 @@ export const createEntryRoute: Express = express();
 
 /**
  * Endpoint allowing for the creation of entries.
- * Importantly, the tags submitted with the entries are separated
- * and inserted into their own table, and then the entries here are
- * inserted with just
+ *
+ * Please note that the tags and entries are stored in separate tables.
+ * However, since the plain text of the tag (with some escaping and casing changes)
+ * is being used as the partition-key of the tags table, we can make an
+ * assumption about the tags' keys and create the `entry` item with the list of `tag` ids,
+ * and then after the entry is created and we have the new entry id, we can ~safely~
+ * create/update all of the tags with their `entries` arrays including this new log entry id.
+ *
+ * This also means that the tags can be inserted/updated in the database *after* the response
+ * is sent back to the client.
+ *
+ * This is intended to follow a no-sql Two-Way Embedded relationship pattern between
+ * "tags" and "entries", where each tag can have many entries, and each entry can have many tags.
+ *
+ * TODOs:
+ * - safer error handling
+ * - additional follow-up action of comparing new tags to existing ones
+ *   (with something like https://www.npmjs.com/package/string-similarity),
+ *   and send off "update prompts" to the user in slack where they can choose to merge
+ *   their tag with an existing similar one.
+ *   - oh this would actually be an additional request from the boltjs, but you get the point!
  */
 createEntryRoute.post(
   "/createEntry",

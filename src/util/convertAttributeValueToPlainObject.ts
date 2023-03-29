@@ -3,7 +3,7 @@ import { AttributeValue } from "@aws-sdk/client-dynamodb";
 export type AttributeValueValue = string | boolean | number | string[];
 
 /**
- * Takes an object of shape:
+ * Takes an object of AWS DynamodDB AttributeValue shape:
  * {
  *      attribName1: { S: "stringValue" },
  *      attribName2: { SS: { "string", "set"} },

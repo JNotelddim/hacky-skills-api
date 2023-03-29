@@ -8,6 +8,14 @@ import { convertAttributeValueToPlainObject } from "../util";
 
 export const getTagsRoute: Express = express();
 
+/**
+ * This `tags` endpoint is aiming towards a cursor-paginated list response,
+ * but it's still a work-in-progress.
+ * It currently supports moving forward from one page to the next, but moving
+ * backword is trickier than I expected with dynamodb, so for now if the user
+ * wanted to go backwards they'd have to just go back to the beginning and start
+ * paging through again :grimace:
+ */
 getTagsRoute.get(
   "/tags",
   authenticateJWT,
@@ -27,7 +35,6 @@ getTagsRoute.get(
       ExpressionAttributeNames: { "#k": TAGS_KEY },
     });
 
-    // K but how would I support "before"?...
     if (after) {
       listTagsCommand.input.ExclusiveStartKey = {
         [TAGS_KEY]: { S: after.toString() },

@@ -8,15 +8,6 @@ import jwt from "jsonwebtoken";
  * from the BoltJS app, and then this API validates the tokens.
  * This way we know fairly confidently that it's the bolt app making the requests.
  */
-
-// export const authenticateJWT = (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   next();
-// };
-
 export const authenticateJWT = (
   req: Request,
   res: Response,
