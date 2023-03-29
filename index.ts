@@ -60,36 +60,33 @@ export const authenticateJWT = (
 ) => {
   const authHeader = req.headers.authorization;
 
-  console.log("skipping authentication for local development");
-  next();
+  try {
+    if (!authHeader) {
+      console.log("missing authheader");
+      res.sendStatus(400);
+      return;
+    }
 
-  // try {
-  //   if (!authHeader) {
-  //     console.log("missing authheader");
-  //     res.sendStatus(400);
-  //     return;
-  //   }
+    if (!process.env.BOLT_KEY) {
+      console.log("missing bolt key");
+      res.sendStatus(500);
+      return;
+    }
 
-  //   if (!process.env.BOLT_KEY) {
-  //     console.log("missing bolt key");
-  //     res.sendStatus(500);
-  //     return;
-  //   }
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
+      if (err) {
+        console.log({ err });
+        return res.sendStatus(403);
+      }
 
-  //   const token = authHeader.split(" ")[1];
-  //   jwt.verify(token, process.env.BOLT_KEY, (err, payload) => {
-  //     if (err) {
-  //       console.log({ err });
-  //       return res.sendStatus(403);
-  //     }
+      (req as any).authPayload = payload;
 
-  //     (req as any).authPayload = payload;
-
-  //     next();
-  //   });
-  // } catch (e) {
-  //   console.log(e);
-  // }
+      next();
+    });
+  } catch (e) {
+    console.log(e);
+  }
 };
 
 /** Express endpoints **/
