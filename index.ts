@@ -131,13 +131,39 @@ app.get("/tags", authenticateJWT, async (req: Request, res: Response) => {
 
   // TODO: paginate
 
+  const { before, after, size } = req.query;
+
+  console.log("creating tag list command", before, after, size);
+
+  let limit = parseInt(size?.toString() || "");
+  if (isNaN(limit)) {
+    limit = 5;
+  }
+
+  console.log({ limit });
+
   // Scans are bad though right? :(
   const listTagsCommand = new ScanCommand({
     TableName: TAGS_TABLE,
+    Limit: limit,
     ProjectionExpression: "#k, originalTag, createdAt",
     ExpressionAttributeNames: { "#k": TAGS_KEY },
   });
+
+  // K but how would I support "before"?...
+  if (after) {
+    console.log("applying 'after' value as key condition", after);
+
+    listTagsCommand.input.ExclusiveStartKey = {
+      [TAGS_KEY]: { S: after.toString() },
+    };
+  }
+
+  console.log({ listTagsCommand: JSON.stringify(listTagsCommand) });
+
   const tagsResults = await client.send(listTagsCommand);
+
+  console.log({ tagsResults });
 
   if (!tagsResults.Count || tagsResults.Count <= 0) {
     res.send({ message: "No tags found", data: [] });
