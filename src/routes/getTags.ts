@@ -1,4 +1,4 @@
-import { ScanCommand } from "@aws-sdk/client-dynamodb";
+import { QueryCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
 import express, { Express, Request, Response } from "express";
 
 import { client } from "..";
@@ -25,6 +25,7 @@ getTagsRoute.get(
 
     let limit = parseInt(size?.toString() || "");
     if (isNaN(limit)) {
+      // TODO: update default size to be >5
       limit = 5;
     }
 
@@ -34,6 +35,11 @@ getTagsRoute.get(
       ProjectionExpression: "#k, originalTag, createdAt",
       ExpressionAttributeNames: { "#k": TAGS_KEY },
     });
+    // Is this going to be a terrible idea which racks up a huge amount of charges?
+    const tagsTotalCountCommand = new ScanCommand({
+      TableName: TAGS_TABLE,
+      Select: "COUNT",
+    });
 
     if (after) {
       listTagsCommand.input.ExclusiveStartKey = {
@@ -42,6 +48,7 @@ getTagsRoute.get(
     }
 
     const tagsResults = await client.send(listTagsCommand);
+    const tagsCountResults = await client.send(tagsTotalCountCommand);
 
     if (!tagsResults.Count || tagsResults.Count <= 0) {
       res.send({ message: "No tags found", data: [] });
@@ -56,6 +63,7 @@ getTagsRoute.get(
       data: {
         items: reformattedTags,
         hasMore: !!tagsResults.LastEvaluatedKey,
+        count: tagsCountResults.Count,
       },
     });
   }
